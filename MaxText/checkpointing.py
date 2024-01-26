@@ -43,6 +43,27 @@ def create_orbax_checkpoint_manager(
   else:
     checkpointer = Checkpointer(checkpoint.PyTreeCheckpointHandler())
 
+  # Monkey-patch orbax to replicate checkpoint save.
+  LOCAL_DIR = 'checkpoint_local'
+  REMOTE_DIR = 'checkpoint_remote'
+  if LOCAL_DIR not in p.parts:
+    max_logging.log(f"Checkpoint path {p} is not local ramdisk, doing conventional checkpoint")
+  else:
+    max_logging.log(f"Checkpoint path {p} is local ramdisk, will replicate")
+    # Monkey patch orbax saving
+    orig_atomic_save = checkpoint.utils.ensure_atomic_save
+    def replicated_save(temp_ckpt_dir: epath.Path, final_ckpt_dir: epath.Path):
+      orig_atomic_save(temp_ckpt_dir, final_ckpt_dir)
+      if LOCAL_DIR in final_ckpt_dir.parts:
+        dirs = list(p.parts)
+        for i in range(len(dirs)):
+          if dirs[i] == LOCAL_DIR:
+            dirs[i] = REMOTE_DIR
+        remote_dir = epath.Path(*dirs)
+        max_logging.log(f"Replicating {final_ckpt_dir} to {remote_dir}")
+        orig_atomic_save(temp_ckpt_dir, remote_dir)
+    checkpoint.utils.ensure_atomic_save = replicated_save
+
   mngr = CheckpointManager(
       p,
       checkpointer,
