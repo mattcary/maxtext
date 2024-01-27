@@ -16,6 +16,8 @@
 
 """Create an Orbax CheckpointManager with specified (Async or not) Checkpointer."""
 
+import os
+
 from etils import epath
 import jax
 from orbax import checkpoint
@@ -44,8 +46,8 @@ def create_orbax_checkpoint_manager(
     checkpointer = Checkpointer(checkpoint.PyTreeCheckpointHandler())
 
   # Monkey-patch orbax to replicate checkpoint save.
-  LOCAL_DIR = 'checkpoint_local'
-  REMOTE_DIR = 'checkpoint_remote'
+  LOCAL_DIR = os.environ["LOCAL_DIR"]
+  REMOTE_DIR = os.environ["REMOTE_DIR"]
   if LOCAL_DIR not in p.parts:
     max_logging.log(f"Checkpoint path {p} is not local ramdisk, doing conventional checkpoint")
   else:
@@ -53,6 +55,7 @@ def create_orbax_checkpoint_manager(
     # Monkey patch orbax saving
     orig_atomic_save = checkpoint.utils.ensure_atomic_save
     def replicated_save(temp_ckpt_dir: epath.Path, final_ckpt_dir: epath.Path):
+      max_logging.log(f"atomic save {temp_ckpt_dir} -> {final_ckpt_dir}")
       orig_atomic_save(temp_ckpt_dir, final_ckpt_dir)
       if LOCAL_DIR in final_ckpt_dir.parts:
         dirs = list(p.parts)

@@ -19,7 +19,6 @@
 import checkpointing
 import common_types
 import functools
-from etils import epath
 
 import max_logging
 
@@ -137,25 +136,14 @@ def initialize_jax_distributed_system():
       Currently jax.distributed.initialize() fully works as expected!
   """
   max_logging.log("Attempting to initialize the jax distributed system...")
-  ID_ENV = "JAX_ID_FILE"
-  if ID_ENV in os.environ:
-    max_logging.log("Looking for existing process id")
-    id_path = epath.Path(os.environ[ID_ENV])
-    id = None
-    if id_path.exists():
-      contents = open(id_path).readline()
-      try:
-        id = int(contents)
-      except ValueError:
-        max_logging.log(f"Bad id {contents}, ignoring")
-      max_logging.log(f"Found existing id {id}, using it for jax inititialization")
-  jax.distributed.initialize(process_id=id)
-  if id is None:
-    jax_global_state = jax._src.distributed.global_state  # pylint: disable=protected-access
-    id = jax_global_state.process_id
-    with open(id_path, 'w') as o:
-      o.write(f'{id}\n')
-    max_logging.log("Saved process id {id}")
+  ID_ENV = "JAX_ID"
+  COORD_ENV = "JAX_COORDINATOR"
+  PROCS_ENV = "JAX_NUM_PROCS"
+  
+  jax.distributed.initialize(
+    process_id=int(os.environ[ID_ENV]),
+    coordinator_address=os.environ[COORD_ENV],
+    num_processes=int(os.environ[PROCS_ENV]))                             
 
   max_logging.log("Jax distributed system initialized!")
 
